@@ -1,0 +1,245 @@
+{# templates/energy/train.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Обучение ML модели - Система оценки трат электроэнергии{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-cpu text-primary"></i> Обучение модели машинного обучения</h1>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика данных -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-database"></i> Данные для обучения
+                </div>
+                <div class="card-body">
+                    {% if training_stats.total_records > 0 %}
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h3 class="text-primary">{{ training_stats.total_records }}</h3>
+                                <small class="text-muted">Записей</small>
+                            </div>
+                            <div class="col-4">
+                                <h3 class="text-success">{{ training_stats.features_count }}</h3>
+                                <small class="text-muted">Признаков</small>
+                            </div>
+                            <div class="col-4">
+                                <h3 class="text-warning">4</h3>
+                                <small class="text-muted">Параметра</small>
+                            </div>
+                        </div>
+
+                        <!-- Статистика по сезонам -->
+                        <hr>
+                        <h6>Данные по сезонам:</h6>
+                        {% for stat in training_stats.season_stats %}
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-capitalize">{{ stat.season }}</span>
+                                <span class="fw-bold">{{ stat.total_records }} зап.</span>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="bi bi-database-x display-4 text-muted"></i>
+                            <p class="text-muted mt-2">Нет данных для обучения</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-check-circle"></i> Статус модели
+                </div>
+                <div class="card-body">
+                    <!-- Линейная регрессия -->
+                    <div class="d-flex justify-content-between align-items-center p-3 rounded {% if models_trained.linear_regression %}bg-light-success{% else %}bg-light-warning{% endif %}">
+                        <div>
+                            <h5 class="mb-1">Линейная регрессия</h5>
+                            <small class="text-muted">Алгоритм машинного обучения для прогнозирования</small>
+                        </div>
+                        <div>
+                            {% if models_trained.linear_regression %}
+                                <span class="badge bg-success fs-6">Обучена</span>
+                            {% else %}
+                                <span class="badge bg-warning fs-6">Не обучена</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if linear_result %}
+                        <hr>
+                        <h6>Результаты обучения:</h6>
+                        <div class="alert alert-success">
+                            <h6><i class="bi bi-graph-up"></i> Линейная регрессия</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small><strong>Точность:</strong> {{ (linear_result.accuracy * 100)|number_format(1) }}%</small>
+                                </div>
+                                <div class="col-6">
+                                    <small><strong>Данные:</strong> {{ linear_result.training_samples }}/{{ linear_result.test_samples }}</small>
+                                </div>
+                            </div>
+                            {% if linear_result.mean_absolute_error %}
+                                <div class="row mt-1">
+                                    <div class="col-6">
+                                        <small><strong>MAE:</strong> {{ "%.1f"|format(linear_result.mean_absolute_error) }}</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small><strong>RMSE:</strong> {{ "%.1f"|format(linear_result.root_mean_squared_error) }}</small>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Действия -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-gear"></i> Управление обучением
+                </div>
+                <div class="card-body">
+                    {% if training_stats.total_records > 0 %}
+                        <form method="post">
+                            <div class="row justify-content-center">
+                                <div class="col-md-8">
+                                    <div class="card border-primary">
+                                        <div class="card-body text-center py-4">
+                                            <i class="bi bi-graph-up display-4 text-primary mb-3"></i>
+                                            <h4 class="text-primary">Линейная регрессия</h4>
+                                            <p class="text-muted">Алгоритм для прогнозирования потребления электроэнергии на основе исторических данных</p>
+
+                                            <div class="row mb-3">
+                                                <div class="col-6">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-check-circle text-success"></i><br>
+                                                        Быстрое обучение
+                                                    </small>
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-check-circle text-success"></i><br>
+                                                        Стабильные результаты
+                                                    </small>
+                                                </div>
+                                            </div>
+
+                                            <button type="submit" name="action" value="train_linear"
+                                                    class="btn {% if models_trained.linear_regression %}btn-outline-success btn-lg{% else %}btn-primary btn-lg{% endif %}">
+                                                {% if models_trained.linear_regression %}
+                                                    <i class="bi bi-arrow-repeat"></i> Переобучить модель
+                                                {% else %}
+                                                    <i class="bi bi-play-circle"></i> Обучить модель
+                                                {% endif %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button type="submit" name="action" value="generate_demo_data" class="btn btn-outline-info">
+                                    <i class="bi bi-magic"></i> Сгенерировать демо-данные
+                                </button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-database-slash display-1 text-muted"></i>
+                            <h4 class="text-muted mt-3">Нет данных для обучения</h4>
+                            <p class="text-muted">Добавьте данные о потреблении или сгенерируйте демо-данные</p>
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{{ path('energy_add') }}" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle"></i> Добавить данные
+                                </a>
+                                <form method="post" class="d-inline">
+                                    <button type="submit" name="action" value="generate_demo_data" class="btn btn-outline-info">
+                                        <i class="bi bi-magic"></i> Демо-данные
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Информация о модели -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <i class="bi bi-info-circle"></i> Информация о модели
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h5>Линейная регрессия</h5>
+                            <p class="text-muted">
+                                Линейная регрессия - это статистический метод, который используется для моделирования
+                                линейной зависимости между независимыми переменными (площадь, жильцы, сезон, температура)
+                                и зависимой переменной (потребление электроэнергии).
+                            </p>
+                            <h6>Преимущества:</h6>
+                            <ul class="text-muted">
+                                <li>Быстрое обучение и прогнозирование</li>
+                                <li>Простота интерпретации результатов</li>
+                                <li>Хорошо работает с линейными зависимостями</li>
+                                <li>Минимальные требования к вычислительным ресурсам</li>
+                            </ul>
+                            <h6>Используемые признаки:</h6>
+                            <div class="row">
+                                <div class="col-md-3 text-center">
+                                    <span class="badge bg-primary">Площадь</span>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <span class="badge bg-success">Жильцы</span>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <span class="badge bg-warning">Сезон</span>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <span class="badge bg-info">Температура</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block stylesheets %}
+    <style>
+        .bg-light-success {
+            background-color: rgba(25, 135, 84, 0.1) !important;
+            border: 1px solid rgba(25, 135, 84, 0.2);
+        }
+
+        .bg-light-warning {
+            background-color: rgba(255, 193, 7, 0.1) !important;
+            border: 1px solid rgba(255, 193, 7, 0.2);
+        }
+
+        .display-4 {
+            font-size: 2.5rem;
+        }
+    </style>
+{% endblock %}

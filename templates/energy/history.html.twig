@@ -1,0 +1,124 @@
+{# templates/energy/history.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}История данных - Система оценки трат электроэнергии{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-clock-history text-primary"></i> История потребления</h1>
+                <a href="{{ path('energy_add') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Добавить запись
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-bar-chart"></i> Статистика по сезонам
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for stat in stats %}
+                            <div class="col-md-3 col-6 text-center mb-3">
+                                <div class="border rounded p-3">
+                                    <h5 class="text-capitalize">{{ stat.season }}</h5>
+                                    <h4 class="text-primary">{{ "%.1f"|format(stat.avg_consumption) }} кВт·ч</h4>
+                                    <small class="text-muted">
+                                        от {{ "%.1f"|format(stat.min_consumption) }} до {{ "%.1f"|format(stat.max_consumption) }}
+                                    </small>
+                                    <br>
+                                    <small class="text-muted">{{ stat.total_records }} записей</small>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="col-12 text-center">
+                                <p class="text-muted">Нет данных для отображения статистики</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица данных -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-table"></i> Все записи потребления
+                </div>
+                <div class="card-body">
+                    {% if consumptions is not empty %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Площадь (м²)</th>
+                                    <th>Жильцы</th>
+                                    <th>Сезон</th>
+                                    <th>Температура</th>
+                                    <th>Потребление</th>
+                                    <th>Заметки</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for consumption in consumptions %}
+                                    <tr>
+                                        <td>{{ consumption.createdAt|date('d.m.Y H:i') }}</td>
+                                        <td>{{ consumption.area }}</td>
+                                        <td>{{ consumption.residents }}</td>
+                                        <td>
+                                        <span class="badge
+                                            {% if consumption.season == 'winter' %}bg-info
+                                            {% elseif consumption.season == 'spring' %}bg-success
+                                            {% elseif consumption.season == 'summer' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ consumption.season }}
+                                        </span>
+                                        </td>
+                                        <td>
+                                        <span class="badge
+                                            {% if consumption.temperature < 0 %}bg-primary
+                                            {% elseif consumption.temperature < 15 %}bg-info
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ consumption.temperature }}°C
+                                        </span>
+                                        </td>
+                                        <td>
+                                            <strong class="text-primary">{{ consumption.consumption }} кВт·ч</strong>
+                                        </td>
+                                        <td>
+                                            {% if consumption.notes %}
+                                                <small class="text-muted">{{ consumption.notes|slice(0, 50) }}{% if consumption.notes|length > 50 %}...{% endif %}</small>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox display-1 text-muted"></i>
+                            <h3 class="text-muted mt-3">Нет данных о потреблении</h3>
+                            <p class="text-muted">Добавьте первую запись для начала работы с системой</p>
+                            <a href="{{ path('energy_add') }}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-plus-circle"></i> Добавить первую запись
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

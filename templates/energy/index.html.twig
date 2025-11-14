@@ -1,0 +1,181 @@
+{# templates/energy/index.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Главная - Система оценки трат электроэнергии{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-lightning-charge text-primary"></i> Система оценки трат электроэнергии</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Статистика данных -->
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-database"></i> Данные для обучения
+                </div>
+                <div class="card-body">
+                    {% if training_stats.total_records > 0 %}
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h3 class="text-primary">{{ training_stats.total_records }}</h3>
+                                <small class="text-muted">Всего записей</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-success">{{ training_stats.features_count }}</h3>
+                                <small class="text-muted">Признаков</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="text-center">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                {% if training_stats.total_records < 10 %}
+                                    Рекомендуется добавить больше данных для обучения
+                                {% else %}
+                                    Достаточно данных для обучения
+                                {% endif %}
+                            </small>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="bi bi-database display-4 text-muted"></i>
+                            <p class="text-muted mt-2">Нет данных для обучения</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Статус моделей -->
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-cpu"></i> Статус ML модели
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-12 mb-3">
+                            <h3>
+                                {% if models_trained.linear_regression %}
+                                    <i class="bi bi-check-circle text-success display-4"></i>
+                                {% else %}
+                                    <i class="bi bi-x-circle text-danger display-4"></i>
+                                {% endif %}
+                            </h3>
+                            <h5>Линейная регрессия</h5>
+                            <small class="text-muted">Машинное обучение для прогнозирования</small>
+                        </div>
+                    </div>
+                    {% if models_trained.linear_regression %}
+                        <div class="alert alert-success py-2 small mb-0">
+                            <i class="bi bi-check-circle"></i> Модель обучена и готова к прогнозированию
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="bi bi-exclamation-triangle"></i> Модель не обучена. Требуется обучение на данных
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Быстрые действия -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning"></i> Быстрые действия
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ path('energy_add') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Добавить данные потребления
+                        </a>
+                        <a href="{{ path('energy_predict') }}" class="btn btn-success {% if not models_trained.linear_regression %}disabled{% endif %}">
+                            <i class="bi bi-graph-up"></i> Сделать прогноз
+                        </a>
+                        <a href="{{ path('energy_train') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-cpu"></i> Обучение модели
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Последние записи -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-clock-history"></i> Недавние записи
+                </div>
+                <div class="card-body">
+                    {% if recent_consumptions is not empty %}
+                        <div class="list-group list-group-flush">
+                            {% for consumption in recent_consumptions|slice(0, 5) %}
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">{{ consumption.area }} м², {{ consumption.residents }} чел.</h6>
+                                        <small>{{ consumption.createdAt|date('d.m.Y') }}</small>
+                                    </div>
+                                    <p class="mb-1">
+                                        <span class="badge bg-secondary text-capitalize">{{ consumption.season }}</span>
+                                        <span class="badge bg-info">{{ consumption.temperature }}°C</span>
+                                        <span class="badge bg-primary">{{ consumption.consumption }} кВт·ч</span>
+                                    </p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center">Нет данных</p>
+                        <div class="text-center">
+                            <a href="{{ path('energy_add') }}" class="btn btn-sm btn-outline-primary">
+                                Добавить первую запись
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние прогнозы -->
+    {% if recent_predictions is not empty %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-graph-up"></i> Последние прогнозы
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for prediction in recent_predictions|slice(0, 3) %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <h4 class="text-success">{{ "%.1f"|format(prediction.predictedConsumption) }} кВт·ч</h4>
+                                            <small class="text-muted">
+                                                {{ prediction.area }} м², {{ prediction.residents }} чел.<br>
+                                                <span class="badge bg-secondary text-capitalize">{{ prediction.season }}</span>
+                                                <span class="badge bg-info">{{ prediction.temperature }}°C</span>
+                                            </small>
+                                            <div class="mt-2">
+                                                <small class="text-muted">{{ prediction.predictedAt|date('d.m.Y H:i') }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

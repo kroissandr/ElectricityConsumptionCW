@@ -1,0 +1,228 @@
+{# templates/energy/predict.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Прогноз потребления - Система оценки трат электроэнергии{% endblock %}
+
+{% block body %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-graph-up"></i> Прогноз потребления электроэнергии</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Статус модели -->
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle"></i> Статус модели:</h5>
+                        <div class="row">
+                            <div class="col-md-12">
+                                Линейная регрессия:
+                                {% if models_trained.linear_regression %}
+                                    <span class="badge bg-success">Обучена</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Не обучена</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if not models_trained.linear_regression %}
+                            <p class="mb-0 mt-2">
+                                <small>Для работы прогноза необходимо сначала обучить модель на странице обучения.</small>
+                            </p>
+                        {% endif %}
+                    </div>
+
+                    {{ form_start(form, {'attr': {'class': 'needs-validation', 'novalidate': 'novalidate'}}) }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form_label(form.area) }}
+                            {{ form_widget(form.area, {'attr': {'class': 'form-control'}}) }}
+                            <div class="form-text">Площадь помещения для прогноза</div>
+                            {% if form.area.vars.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form_errors(form.area) }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            {{ form_label(form.residents) }}
+                            {{ form_widget(form.residents, {'attr': {'class': 'form-control'}}) }}
+                            <div class="form-text">Количество проживающих</div>
+                            {% if form.residents.vars.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form_errors(form.residents) }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form_label(form.season) }}
+                            {{ form_widget(form.season, {'attr': {'class': 'form-select'}}) }}
+                            <div class="form-text">Сезон для прогноза</div>
+                            {% if form.season.vars.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form_errors(form.season) }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            {{ form_label(form.temperature) }}
+                            {{ form_widget(form.temperature, {'attr': {'class': 'form-control'}}) }}
+                            <div class="form-text">Ожидаемая температура</div>
+                            {% if form.temperature.vars.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form_errors(form.temperature) }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg"
+                                {% if not models_trained.linear_regression %}disabled{% endif %}>
+                            <i class="bi bi-calculator"></i> Сделать прогноз
+                        </button>
+                    </div>
+
+                    {{ form_end(form) }}
+
+                    <!-- Результат прогноза -->
+                    {% if prediction %}
+                        <div class="mt-4 p-4 bg-light rounded">
+                            <h4 class="text-success mb-4"><i class="bi bi-check-circle"></i> Результат прогноза</h4>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5 class="border-bottom pb-2">Входные данные:</h5>
+                                    <div class="row">
+                                        <div class="col-6 mb-2">
+                                            <strong>Площадь:</strong><br>
+                                            <span class="text-primary">{{ prediction.area }} м²</span>
+                                        </div>
+                                        <div class="col-6 mb-2">
+                                            <strong>Жильцы:</strong><br>
+                                            <span class="text-primary">{{ prediction.residents }} чел.</span>
+                                        </div>
+                                        <div class="col-6 mb-2">
+                                            <strong>Сезон:</strong><br>
+                                            <span class="badge
+                                            {% if prediction.season == 'winter' %}bg-info
+                                            {% elseif prediction.season == 'spring' %}bg-success
+                                            {% elseif prediction.season == 'summer' %}bg-warning
+                                            {% else %}bg-secondary{% endif %} text-capitalize">
+                                            {{ prediction.season }}
+                                        </span>
+                                        </div>
+                                        <div class="col-6 mb-2">
+                                            <strong>Температура:</strong><br>
+                                            <span class="text-primary">{{ prediction.temperature }}°C</span>
+                                        </div>
+                                        <div class="col-12 mt-2">
+                                            <strong>Модель:</strong><br>
+                                            <span class="badge bg-primary">Линейная регрессия</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 text-center">
+                                    <div class="border-start ps-4">
+                                        <h5 class="border-bottom pb-2">Прогноз потребления:</h5>
+                                        <div class="display-4 text-primary fw-bold my-3">
+                                            {{ "%.1f"|format(prediction.predictedConsumption) }}
+                                        </div>
+                                        <div class="h5 text-muted mb-3">киловатт-часов</div>
+
+                                        {% if prediction.confidence %}
+                                            <div class="mt-3">
+                                            <span class="badge bg-info fs-6">
+                                                <i class="bi bi-shield-check"></i>
+                                                Точность: {{ (prediction.confidence * 100)|number_format(1) }}%
+                                            </span>
+                                            </div>
+                                        {% endif %}
+
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                <i class="bi bi-clock"></i>
+                                                Прогноз сделан: {{ prediction.predictedAt|date('d.m.Y H:i') }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Дополнительная информация -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="alert alert-warning">
+                                        <h6><i class="bi bi-lightbulb"></i> Рекомендации:</h6>
+                                        <ul class="mb-0">
+                                            <li>Прогноз основан на исторических данных и может отличаться от фактического потребления</li>
+                                            <li>Учитывайте дополнительные факторы: тип отопления, наличие электроприборов</li>
+                                            <li>Регулярно обновляйте данные для повышения точности прогнозов</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Ссылка на обучение моделей -->
+            {% if not models_trained.linear_regression %}
+                <div class="text-center mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="text-warning"><i class="bi bi-exclamation-triangle"></i> Модель не обучена</h5>
+                            <p class="text-muted">Для использования функции прогнозирования необходимо обучить модель машинного обучения</p>
+                            <a href="{{ path('energy_train') }}" class="btn btn-primary">
+                                <i class="bi bi-cpu"></i> Перейти к обучению модели
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block stylesheets %}
+    <style>
+        .display-4 {
+            font-size: 3rem;
+            font-weight: 300;
+        }
+
+        .border-start {
+            border-left: 2px solid #dee2e6 !important;
+        }
+
+        @media (max-width: 768px) {
+            .border-start {
+                border-left: none !important;
+                border-top: 2px solid #dee2e6 !important;
+                padding-left: 0 !important;
+                padding-top: 1rem;
+                margin-top: 1rem;
+            }
+
+            .display-4 {
+                font-size: 2.5rem;
+            }
+        }
+
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+
+        .card-header {
+            font-weight: 600;
+        }
+    </style>
+{% endblock %}

@@ -1,0 +1,199 @@
+{# templates/energy/stats.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Статистика - Система оценки трат электроэнергии{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-12">
+            <h1><i class="bi bi-bar-chart text-primary"></i> Статистика системы</h1>
+            <p class="text-muted">Анализ данных и эффективности модели</p>
+        </div>
+    </div>
+
+    <!-- Статистика потребления -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-lightning"></i> Статистика потребления по сезонам
+                </div>
+                <div class="card-body">
+                    {% if consumption_stats is not empty %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                <tr>
+                                    <th>Сезон</th>
+                                    <th>Среднее потребление</th>
+                                    <th>Минимальное</th>
+                                    <th>Максимальное</th>
+                                    <th>Количество записей</th>
+                                    <th>Диапазон</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for stat in consumption_stats %}
+                                    <tr>
+                                        <td>
+                                        <span class="badge
+                                            {% if stat.season == 'winter' %}bg-info
+                                            {% elseif stat.season == 'spring' %}bg-success
+                                            {% elseif stat.season == 'summer' %}bg-warning
+                                            {% else %}bg-secondary{% endif %} text-capitalize">
+                                            {{ stat.season }}
+                                        </span>
+                                        </td>
+                                        <td>
+                                            <strong class="text-primary">{{ "%.1f"|format(stat.avg_consumption) }} кВт·ч</strong>
+                                        </td>
+                                        <td>{{ "%.1f"|format(stat.min_consumption) }} кВт·ч</td>
+                                        <td>{{ "%.1f"|format(stat.max_consumption) }} кВт·ч</td>
+                                        <td>
+                                            <span class="badge bg-dark">{{ stat.total_records }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ "%.1f"|format(stat.max_consumption - stat.min_consumption) }} кВт·ч
+                                            </small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-bar-chart display-1 text-muted"></i>
+                            <p class="text-muted mt-3">Нет данных для статистики</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика прогнозов -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-graph-up"></i> Статистика модели прогнозирования
+                </div>
+                <div class="card-body">
+                    {% if prediction_stats is not empty %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                <tr>
+                                    <th>Модель</th>
+                                    <th>Средняя точность</th>
+                                    <th>Всего прогнозов</th>
+                                    <th>Первый прогноз</th>
+                                    <th>Последний прогноз</th>
+                                    <th>Активность</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for stat in prediction_stats %}
+                                    <tr>
+                                        <td>
+                                        <span class="badge bg-primary">
+                                            {{ stat.modelUsed }}
+                                        </span>
+                                        </td>
+                                        <td>
+                                            {% if stat.avg_confidence %}
+                                                <strong class="text-success">{{ (stat.avg_confidence * 100)|number_format(1) }}%</strong>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-dark">{{ stat.total_predictions }}</span>
+                                        </td>
+                                        <td>
+                                            <small>{{ stat.first_prediction|date('d.m.Y H:i') }}</small>
+                                        </td>
+                                        <td>
+                                            <small>{{ stat.last_prediction|date('d.m.Y H:i') }}</small>
+                                        </td>
+                                        <td>
+                                            {% set last_prediction_date = stat.last_prediction is iterable ? stat.last_prediction : date(stat.last_prediction) %}
+                                            {% set days_diff = (date().timestamp - last_prediction_date.timestamp) / (60 * 60 * 24) %}
+                                            {% if days_diff < 1 %}
+                                                <span class="badge bg-success">Сегодня</span>
+                                            {% elseif days_diff < 7 %}
+                                                <span class="badge bg-info">{{ days_diff|round }} дн. назад</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">{{ days_diff|round }} дн. назад</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-cpu display-1 text-muted"></i>
+                            <p class="text-muted mt-3">Нет данных о прогнозах</p>
+                            <a href="{{ path('energy_predict') }}" class="btn btn-primary">
+                                <i class="bi bi-graph-up"></i> Сделать первый прогноз
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ключевые метрики -->
+    <div class="row mt-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-primary">
+                <div class="card-body">
+                    <i class="bi bi-database display-6 text-primary"></i>
+                    <h3 class="mt-2">
+                        {% set total_records = consumption_stats|reduce((sum, stat) => sum + stat.total_records, 0) %}
+                        {{ total_records }}
+                    </h3>
+                    <p class="text-muted mb-0">Всего записей</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-success">
+                <div class="card-body">
+                    <i class="bi bi-graph-up display-6 text-success"></i>
+                    <h3 class="mt-2">
+                        {% set total_predictions = prediction_stats|reduce((sum, stat) => sum + stat.total_predictions, 0) %}
+                        {{ total_predictions }}
+                    </h3>
+                    <p class="text-muted mb-0">Всего прогнозов</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-info">
+                <div class="card-body">
+                    <i class="bi bi-cpu display-6 text-info"></i>
+                <h3 class="mt-2">1</h3>
+                <p class="text-muted mb-0">ML моделей</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+        <div class="card text-center border-warning">
+            <div class="card-body">
+                <i class="bi bi-clock display-6 text-warning"></i>
+                <h3 class="mt-2">{{ "now"|date("d.m.Y") }}</h3>
+                <p class="text-muted mb-0">Текущая дата</p>
+            </div>
+        </div>
+    </div>
+    </div>
+{% endblock %}
