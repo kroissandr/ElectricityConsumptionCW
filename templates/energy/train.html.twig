@@ -1,4 +1,5 @@
-{# templates/energy/train.html.twig #}
+{# templates/energy/train.html.twig - добавляем SVR #}
+
 {% extends 'base.html.twig' %}
 
 {% block title %}Обучение ML модели - Система оценки трат электроэнергии{% endblock %}
@@ -7,14 +8,24 @@
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1><i class="bi bi-cpu text-primary"></i> Обучение модели машинного обучения</h1>
+                <h1><i class="bi bi-cpu text-primary"></i> Обучение моделей машинного обучения</h1>
+                {% if recommended_model %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-lightbulb"></i> Рекомендуемая модель:
+                        <strong class="text-capitalize">
+                            {% if recommended_model == 'linear_regression' %}Линейная регрессия
+                            {% elseif recommended_model == 'support_vector_regression' %}Support Vector Regression
+                            {% else %}{{ recommended_model }}{% endif %}
+                        </strong>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
     <!-- Статистика данных -->
     <div class="row mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card">
                 <div class="card-header bg-info text-white">
                     <i class="bi bi-database"></i> Данные для обучения
@@ -22,29 +33,26 @@
                 <div class="card-body">
                     {% if training_stats.total_records > 0 %}
                         <div class="row text-center">
-                            <div class="col-4">
+                            <div class="col-6">
                                 <h3 class="text-primary">{{ training_stats.total_records }}</h3>
                                 <small class="text-muted">Записей</small>
                             </div>
-                            <div class="col-4">
+                            <div class="col-6">
                                 <h3 class="text-success">{{ training_stats.features_count }}</h3>
                                 <small class="text-muted">Признаков</small>
                             </div>
-                            <div class="col-4">
-                                <h3 class="text-warning">4</h3>
-                                <small class="text-muted">Параметра</small>
-                            </div>
                         </div>
 
-                        <!-- Статистика по сезонам -->
+                        <!-- Рекомендация -->
                         <hr>
-                        <h6>Данные по сезонам:</h6>
-                        {% for stat in training_stats.season_stats %}
-                            <div class="d-flex justify-content-between mb-1">
-                                <span class="text-capitalize">{{ stat.season }}</span>
-                                <span class="fw-bold">{{ stat.total_records }} зап.</span>
-                            </div>
-                        {% endfor %}
+                        <div class="alert alert-{{ training_stats.total_records >= 20 ? 'success' : 'warning' }} py-2 small mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            {% if training_stats.total_records < 20 %}
+                                📈 Для SVR рекомендуется минимум 20 записей
+                            {% else %}
+                                ✅ Достаточно данных для всех моделей
+                            {% endif %}
+                        </div>
                     {% else %}
                         <div class="text-center py-3">
                             <i class="bi bi-database-x display-4 text-muted"></i>
@@ -55,17 +63,17 @@
             </div>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-8">
             <div class="card">
                 <div class="card-header bg-success text-white">
-                    <i class="bi bi-check-circle"></i> Статус модели
+                    <i class="bi bi-check-circle"></i> Статус моделей
                 </div>
                 <div class="card-body">
                     <!-- Линейная регрессия -->
-                    <div class="d-flex justify-content-between align-items-center p-3 rounded {% if models_trained.linear_regression %}bg-light-success{% else %}bg-light-warning{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center p-3 rounded mb-3 {% if models_trained.linear_regression %}bg-light-success{% else %}bg-light-warning{% endif %}">
                         <div>
                             <h5 class="mb-1">Линейная регрессия</h5>
-                            <small class="text-muted">Алгоритм машинного обучения для прогнозирования</small>
+                            <small class="text-muted">Быстрая, интерпретируемая модель для линейных зависимостей</small>
                         </div>
                         <div>
                             {% if models_trained.linear_regression %}
@@ -76,30 +84,61 @@
                         </div>
                     </div>
 
-                    {% if linear_result %}
-                        <hr>
-                        <h6>Результаты обучения:</h6>
-                        <div class="alert alert-success">
-                            <h6><i class="bi bi-graph-up"></i> Линейная регрессия</h6>
-                            <div class="row">
-                                <div class="col-6">
-                                    <small><strong>Точность:</strong> {{ (linear_result.accuracy * 100)|number_format(1) }}%</small>
-                                </div>
-                                <div class="col-6">
-                                    <small><strong>Данные:</strong> {{ linear_result.training_samples }}/{{ linear_result.test_samples }}</small>
-                                </div>
-                            </div>
-                            {% if linear_result.mean_absolute_error %}
-                                <div class="row mt-1">
-                                    <div class="col-6">
-                                        <small><strong>MAE:</strong> {{ "%.1f"|format(linear_result.mean_absolute_error) }}</small>
-                                    </div>
-                                    <div class="col-6">
-                                        <small><strong>RMSE:</strong> {{ "%.1f"|format(linear_result.root_mean_squared_error) }}</small>
-                                    </div>
-                                </div>
+                    <!-- Support Vector Regression -->
+                    <div class="d-flex justify-content-between align-items-center p-3 rounded {% if models_trained.support_vector_regression %}bg-light-success{% else %}bg-light-warning{% endif %}">
+                        <div>
+                            <h5 class="mb-1">Support Vector Regression (SVR)</h5>
+                            <small class="text-muted">Мощная модель для нелинейных зависимостей</small>
+                        </div>
+                        <div>
+                            {% if models_trained.support_vector_regression %}
+                                <span class="badge bg-success fs-6">Обучена</span>
+                            {% else %}
+                                <span class="badge bg-warning fs-6">Не обучена</span>
                             {% endif %}
                         </div>
+                    </div>
+
+                    {% if linear_result or svr_result %}
+                        <hr>
+                        <h6>Результаты обучения:</h6>
+
+                        {% if linear_result %}
+                            <div class="alert alert-success mb-2">
+                                <h6><i class="bi bi-graph-up"></i> Линейная регрессия</h6>
+                                <div class="row">
+                                    <div class="col-4">
+                                        <small><strong>Точность:</strong> {{ (linear_result.accuracy * 100)|number_format(1) }}%</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <small><strong>Данные:</strong> {{ linear_result.training_samples }}/{{ linear_result.test_samples }}</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <small><strong>Модель:</strong> Линейная</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if svr_result %}
+                            <div class="alert alert-info mb-0">
+                                <h6><i class="bi bi-diagram-3"></i> Support Vector Regression</h6>
+                                <div class="row">
+                                    <div class="col-3">
+                                        <small><strong>Точность:</strong> {{ (svr_result.accuracy * 100)|number_format(1) }}%</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <small><strong>Данные:</strong> {{ svr_result.training_samples }}/{{ svr_result.test_samples }}</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <small><strong>Ядро:</strong> {{ svr_result.kernel|default('RBF') }}</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <small><strong>Модель:</strong> SVR</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -116,36 +155,104 @@
                 <div class="card-body">
                     {% if training_stats.total_records > 0 %}
                         <form method="post">
-                            <div class="row justify-content-center">
-                                <div class="col-md-8">
-                                    <div class="card border-primary">
-                                        <div class="card-body text-center py-4">
+                            <div class="row">
+                                <!-- Линейная регрессия -->
+                                <div class="col-md-4 mb-4">
+                                    <div class="card border-primary h-100">
+                                        <div class="card-body text-center">
                                             <i class="bi bi-graph-up display-4 text-primary mb-3"></i>
                                             <h4 class="text-primary">Линейная регрессия</h4>
-                                            <p class="text-muted">Алгоритм для прогнозирования потребления электроэнергии на основе исторических данных</p>
+                                            <p class="text-muted small">Быстрая, интерпретируемая модель</p>
 
-                                            <div class="row mb-3">
-                                                <div class="col-6">
-                                                    <small class="text-muted">
-                                                        <i class="bi bi-check-circle text-success"></i><br>
-                                                        Быстрое обучение
-                                                    </small>
+                                            <div class="text-start small mb-3">
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Быстрое обучение</span>
                                                 </div>
-                                                <div class="col-6">
-                                                    <small class="text-muted">
-                                                        <i class="bi bi-check-circle text-success"></i><br>
-                                                        Стабильные результаты
-                                                    </small>
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Интерпретируемые результаты</span>
+                                                </div>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Лучше для линейных данных</span>
                                                 </div>
                                             </div>
 
                                             <button type="submit" name="action" value="train_linear"
-                                                    class="btn {% if models_trained.linear_regression %}btn-outline-success btn-lg{% else %}btn-primary btn-lg{% endif %}">
+                                                    class="btn {% if models_trained.linear_regression %}btn-outline-success{% else %}btn-primary{% endif %} w-100">
                                                 {% if models_trained.linear_regression %}
-                                                    <i class="bi bi-arrow-repeat"></i> Переобучить модель
+                                                    <i class="bi bi-arrow-repeat"></i> Переобучить
                                                 {% else %}
-                                                    <i class="bi bi-play-circle"></i> Обучить модель
+                                                    <i class="bi bi-play-circle"></i> Обучить
                                                 {% endif %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Support Vector Regression -->
+                                <div class="col-md-4 mb-4">
+                                    <div class="card border-info h-100">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-diagram-3 display-4 text-info mb-3"></i>
+                                            <h4 class="text-info">Support Vector Regression</h4>
+                                            <p class="text-muted small">Мощная модель для сложных данных</p>
+
+                                            <div class="text-start small mb-3">
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Работает с нелинейными данными</span>
+                                                </div>
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Устойчива к выбросам</span>
+                                                </div>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="bi bi-exclamation-circle text-warning me-2"></i>
+                                                    <span>Требует больше данных (>20)</span>
+                                                </div>
+                                            </div>
+
+                                            <button type="submit" name="action" value="train_svr"
+                                                    class="btn {% if models_trained.support_vector_regression %}btn-outline-success{% else %}btn-info{% endif %} w-100"
+                                                    {% if training_stats.total_records < 20 %}disabled title="Требуется минимум 20 записей"{% endif %}>
+                                                {% if models_trained.support_vector_regression %}
+                                                    <i class="bi bi-arrow-repeat"></i> Переобучить
+                                                {% else %}
+                                                    <i class="bi bi-play-circle"></i> Обучить
+                                                {% endif %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Автоматический выбор -->
+                                <div class="col-md-4 mb-4">
+                                    <div class="card border-success h-100">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-magic display-4 text-success mb-3"></i>
+                                            <h4 class="text-success">Автоматический выбор</h4>
+                                            <p class="text-muted small">Система сама выберет лучшую модель</p>
+
+                                            <div class="text-start small mb-3">
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Анализирует данные</span>
+                                                </div>
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Выбирает оптимальный алгоритм</span>
+                                                </div>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    <span>Рекомендация: {{ recommended_model == 'linear_regression' ? 'Линейная регрессия' : 'SVR' }}</span>
+                                                </div>
+                                            </div>
+
+                                            <button type="submit" name="action" value="train_best"
+                                                    class="btn btn-success w-100">
+                                                <i class="bi bi-robot"></i> Обучить лучшую модель
                                             </button>
                                         </div>
                                     </div>
@@ -180,44 +287,43 @@
         </div>
     </div>
 
-    <!-- Информация о модели -->
+    <!-- Информация о моделях -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-light">
-                    <i class="bi bi-info-circle"></i> Информация о модели
+                    <i class="bi bi-info-circle"></i> Сравнение моделей
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-12">
+                        <div class="col-md-6">
                             <h5>Линейная регрессия</h5>
                             <p class="text-muted">
-                                Линейная регрессия - это статистический метод, который используется для моделирования
-                                линейной зависимости между независимыми переменными (площадь, жильцы, сезон, температура)
-                                и зависимой переменной (потребление электроэнергии).
+                                Статистический метод для моделирования линейной зависимости между независимыми переменными
+                                и зависимой переменной. Простая в интерпретации, быстрая в обучении.
                             </p>
-                            <h6>Преимущества:</h6>
+                            <h6>Когда использовать:</h6>
                             <ul class="text-muted">
-                                <li>Быстрое обучение и прогнозирование</li>
-                                <li>Простота интерпретации результатов</li>
-                                <li>Хорошо работает с линейными зависимостями</li>
-                                <li>Минимальные требования к вычислительным ресурсам</li>
+                                <li>Маленькие наборы данных (< 20 записей)</li>
+                                <li>Линейные зависимости между признаками</li>
+                                <li>Требуется интерпретируемость результатов</li>
+                                <li>Ограниченные вычислительные ресурсы</li>
                             </ul>
-                            <h6>Используемые признаки:</h6>
-                            <div class="row">
-                                <div class="col-md-3 text-center">
-                                    <span class="badge bg-primary">Площадь</span>
-                                </div>
-                                <div class="col-md-3 text-center">
-                                    <span class="badge bg-success">Жильцы</span>
-                                </div>
-                                <div class="col-md-3 text-center">
-                                    <span class="badge bg-warning">Сезон</span>
-                                </div>
-                                <div class="col-md-3 text-center">
-                                    <span class="badge bg-info">Температура</span>
-                                </div>
-                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <h5>Support Vector Regression (SVR)</h5>
+                            <p class="text-muted">
+                                Расширение метода опорных векторов для задач регрессии. Использует ядерные функции
+                                для работы с нелинейными данными. Более мощный, но сложный алгоритм.
+                            </p>
+                            <h6>Когда использовать:</h6>
+                            <ul class="text-muted">
+                                <li>Большие наборы данных (> 20 записей)</li>
+                                <li>Нелинейные зависимости</li>
+                                <li>Наличие выбросов в данных</li>
+                                <li>Сложные, многомерные зависимости</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -240,6 +346,15 @@
 
         .display-4 {
             font-size: 2.5rem;
+        }
+
+        .card {
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
     </style>
 {% endblock %}

@@ -3,6 +3,7 @@
 
 namespace App\Controller;
 
+use App\Form\PredictionWithModelType;
 use App\Service\EnergyDataService;
 use App\Service\EnergyPredictionService;
 use App\Form\EnergyConsumptionType;
@@ -88,29 +89,56 @@ class EnergyController extends AbstractController
         Request $request,
         EnergyPredictionService $predictionService
     ): Response {
-        // Проверяем, обучена ли модель
+        // Проверяем, обучены ли модели
         $modelsTrained = $predictionService->areModelsTrained();
 
-        if (!$modelsTrained['linear_regression']) {
-            $this->addFlash('warning', 'Модель машинного обучения не обучена. Пожалуйста, сначала обучите модель.');
+        if (!$modelsTrained['linear_regression'] && !$modelsTrained['support_vector_regression']) {
+            $this->addFlash('warning', 'Модели машинного обучения не обучены. Пожалуйста, сначала обучите модель.');
             return $this->redirectToRoute('energy_train');
         }
 
-        $form = $this->createForm(PredictionType::class);
+        $form = $this->createForm(PredictionWithModelType::class);
         $prediction = null;
+        $selectedModel = 'linear_regression';
 
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
             $data = $form->getData();
+            $selectedModel = $data['model_type'] ?? 'auto';
 
             try {
-                $prediction = $predictionService->predictConsumption([
-                    'area' => $data['area'],
-                    'residents' => $data['residents'],
-                    'season' => $data['season'],
-                    'temperature' => $data['temperature'],
-                ]);
+                // Определяем какую модель использовать
+                if ($selectedModel === 'auto') {
+                    // Автовыбор лучшей модели
+                    $selectedModel = $predictionService->selectBestModel();
+                }
+
+                // Выполняем прогноз с выбранной моделью
+                if ($selectedModel === 'support_vector_regression' && $modelsTrained['support_vector_regression']) {
+                    $prediction = $predictionService->predictWithSVR([
+                        'area' => $data['area'],
+                        'residents' => $data['residents'],
+                        'season' => $data['season'],
+                        'temperature' => $data['temperature'],
+                    ]);
+                } elseif ($selectedModel === 'linear_regression' && $modelsTrained['linear_regression']) {
+                    $prediction = $predictionService->predictConsumption([
+                        'area' => $data['area'],
+                        'residents' => $data['residents'],
+                        'season' => $data['season'],
+                        'temperature' => $data['temperature'],
+                    ]);
+                } else {
+                    // Если выбранная модель не обучена, используем доступную
+                    if ($modelsTrained['linear_regression']) {
+                        $prediction = $predictionService->predictConsumption($data);
+                        $selectedModel = 'linear_regression';
+                    } elseif ($modelsTrained['support_vector_regression']) {
+                        $prediction = $predictionService->predictWithSVR($data);
+                        $selectedModel = 'support_vector_regression';
+                    }
+                }
 
                 $this->addFlash('success', 'Прогноз успешно выполнен!');
             } catch (\Exception $e) {
@@ -122,6 +150,7 @@ class EnergyController extends AbstractController
             'form' => $form->createView(),
             'prediction' => $prediction,
             'models_trained' => $modelsTrained,
+            'selected_model' => $selectedModel ?? 'linear_regression'
         ]);
     }
 
@@ -135,7 +164,8 @@ class EnergyController extends AbstractController
         $modelsTrained = $predictionService->areModelsTrained();
 
         $linearResult = null;
-        $randomForestResult = null;
+        $svrResult = null;
+        $bestModelResult = null;
 
         if ($request->isMethod('POST')) {
             $action = $request->request->get('action');
@@ -147,9 +177,15 @@ class EnergyController extends AbstractController
                         $this->addFlash('success', 'Линейная регрессия успешно обучена!');
                         break;
 
-                    case 'train_random_forest':
-                        $randomForestResult = $predictionService->trainRandomForest();
-                        $this->addFlash('success', 'Random Forest успешно обучен!');
+                    case 'train_svr':
+                        $svrResult = $predictionService->trainSVR();
+                        $this->addFlash('success', 'Support Vector Regression успешно обучена!');
+                        break;
+
+                    case 'train_best':
+                        $bestModelResult = $predictionService->trainBestModel();
+                        $modelName = $bestModelResult['model'] === 'linear_regression' ? 'Линейная регрессия' : 'Support Vector Regression';
+                        $this->addFlash('success', "Автоматически выбрана и обучена лучшая модель: $modelName");
                         break;
 
                     case 'generate_demo_data':
@@ -170,11 +206,16 @@ class EnergyController extends AbstractController
             }
         }
 
+        // Определяем рекомендованную модель
+        $recommendedModel = $predictionService->selectBestModel();
+
         return $this->render('energy/train.html.twig', [
             'training_stats' => $trainingStats,
             'models_trained' => $modelsTrained,
             'linear_result' => $linearResult,
-            'random_forest_result' => $randomForestResult,
+            'svr_result' => $svrResult,
+            'best_model_result' => $bestModelResult,
+            'recommended_model' => $recommendedModel
         ]);
     }
 

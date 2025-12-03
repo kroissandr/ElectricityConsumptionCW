@@ -8,6 +8,8 @@ use App\Entity\EnergyPrediction;
 use App\Repository\EnergyConsumptionRepository;
 use App\Repository\EnergyPredictionRepository;
 use Phpml\Regression\LeastSquares;
+use Phpml\Regression\SVR;
+use Phpml\SupportVectorMachine\Kernel;
 use Phpml\Dataset\ArrayDataset;
 use Phpml\CrossValidation\RandomSplit;
 use Phpml\Metric\Regression;
@@ -20,6 +22,7 @@ class EnergyPredictionService
     private EnergyPredictionRepository $predictionRepository;
     private string $modelStoragePath;
     private ?LeastSquares $linearModel = null;
+    private ?SVR $svmModel = null;
     private array $normalizerMeans = [];
     private array $normalizerStddevs = [];
 
@@ -161,6 +164,178 @@ class EnergyPredictionService
     }
 
     /**
+     * Обучает модель Support Vector Regression (SVR)
+     */
+    public function trainSVR(): array
+    {
+        $data = $this->prepareTrainingData();
+        $samples = $data['samples'];
+        $targets = $data['targets'];
+
+        // Нормализуем данные
+        $this->normalizeSamples($samples);
+
+        // Разделяем на обучающую и тестовую выборки
+        $dataset = new RandomSplit(new ArrayDataset($samples, $targets), 0.7);
+
+        // Создаем и обучаем модель SVR
+        $this->svmModel = new SVR(
+            Kernel::RBF, // Радиально-базисная функция
+            1.0,        // Параметр регуляризации
+            0.1,        // Эпсилон-нечувствительная зона
+            0.5,        // Параметр ядра
+            0.0         // Коэффициент кэша
+        );
+
+        $this->svmModel->train(
+            $dataset->getTrainSamples(),
+            $dataset->getTrainLabels()
+        );
+
+        // Оценка модели
+        $testSamples = $dataset->getTestSamples();
+        $testTargets = $dataset->getTestLabels();
+        $predictions = $this->svmModel->predict($testSamples);
+
+        $accuracy = $this->calculateAccuracy($testTargets, $predictions);
+        $mae = $this->calculateMAE($testTargets, $predictions);
+        $rmse = $this->calculateRMSE($testTargets, $predictions);
+
+        // Сохраняем модель
+        $this->saveModel($this->svmModel, 'svr');
+        $this->saveNormalizerParameters();
+
+        return [
+            'model' => 'support_vector_regression',
+            'accuracy' => $accuracy,
+            'training_samples' => count($dataset->getTrainSamples()),
+            'test_samples' => count($testSamples),
+            'mean_absolute_error' => $mae,
+            'root_mean_squared_error' => $rmse,
+            'kernel' => 'RBF',
+            'parameters' => [
+                'C' => 1.0,
+                'epsilon' => 0.1,
+                'gamma' => 0.5
+            ]
+        ];
+    }
+
+    /**
+     * Прогнозирует потребление с использованием SVR модели
+     */
+    public function predictWithSVR(array $inputData): EnergyPrediction
+    {
+        // Преобразуем входные данные в вектор признаков
+        $features = $this->prepareFeatures($inputData);
+
+        // Загружаем модель и параметры нормализации
+        $model = $this->loadModel('svr');
+        $this->loadNormalizerParameters();
+
+        if (!$model) {
+            throw new \RuntimeException("SVR модель не обучена. Сначала обучите модель.");
+        }
+
+        // Нормализуем входные данные
+        $normalizedFeatures = $this->normalizeSample($features);
+
+        // Делаем прогноз
+        $predictionValue = $model->predict([$normalizedFeatures])[0];
+
+        // Денормализуем результат
+        $finalPrediction = max(0, $predictionValue);
+
+        // Создаем и сохраняем объект прогноза
+        $energyPrediction = new EnergyPrediction();
+        $energyPrediction->setArea($inputData['area']);
+        $energyPrediction->setResidents($inputData['residents']);
+        $energyPrediction->setSeason($inputData['season']);
+        $energyPrediction->setTemperature($inputData['temperature']);
+        $energyPrediction->setPredictedConsumption(round($finalPrediction, 2));
+        $energyPrediction->setModelUsed('support_vector_regression');
+        $energyPrediction->setInputData(json_encode($inputData));
+        $energyPrediction->setConfidence($this->calculateSVMPredictionConfidence($predictionValue));
+
+        $this->predictionRepository->save($energyPrediction, true);
+
+        return $energyPrediction;
+    }
+
+    /**
+     * Рассчитывает уверенность прогноза для SVR
+     */
+    private function calculateSVMPredictionConfidence(float $prediction): float
+    {
+        $baseConfidence = 0.82;
+
+        if ($prediction > 1000) {
+            return max(0.65, $baseConfidence - ($prediction - 1000) / 3000);
+        }
+
+        if ($prediction < 100) {
+            return min(0.95, $baseConfidence + 0.1);
+        }
+
+        return $baseConfidence;
+    }
+
+    /**
+     * Выбирает лучшую модель на основе данных
+     */
+    public function selectBestModel(): string
+    {
+        $data = $this->prepareTrainingData();
+
+        if (count($data['samples']) < 20) {
+            return 'linear_regression';
+        }
+
+        $linearityScore = $this->calculateLinearityScore($data['samples'], $data['targets']);
+
+        if ($linearityScore > 0.7) {
+            return 'linear_regression';
+        } else {
+            return 'support_vector_regression';
+        }
+    }
+
+    /**
+     * Оценивает линейность данных
+     */
+    private function calculateLinearityScore(array $samples, array $targets): float
+    {
+        $sampleCount = count($samples);
+
+        if ($sampleCount < 10) {
+            return 0.8;
+        }
+
+        $mean = array_sum($targets) / $sampleCount;
+        $deviations = array_map(fn($x) => abs($x - $mean), $targets);
+        $stdDev = sqrt(array_sum(array_map(fn($x) => $x * $x, $deviations)) / $sampleCount);
+
+        $outliers = array_filter($deviations, fn($d) => $d > 2 * $stdDev);
+        $outlierRatio = count($outliers) / $sampleCount;
+
+        return max(0.1, 1.0 - $outlierRatio);
+    }
+
+    /**
+     * Автоматически выбирает и обучает лучшую модель
+     */
+    public function trainBestModel(): array
+    {
+        $bestModel = $this->selectBestModel();
+
+        return match($bestModel) {
+            'linear_regression' => $this->trainLinearRegression(),
+            'support_vector_regression' => $this->trainSVR(),
+            default => throw new \RuntimeException("Неизвестный тип модели: $bestModel")
+        };
+    }
+
+    /**
      * Прогнозирует потребление электроэнергии
      */
     public function predictConsumption(array $inputData): EnergyPrediction
@@ -182,8 +357,8 @@ class EnergyPredictionService
         // Делаем прогноз
         $predictionValue = $model->predict([$normalizedFeatures])[0];
 
-        // Денормализуем результат (если нужно) - в данном случае оставляем как есть
-        $finalPrediction = max(0, $predictionValue); // Потребление не может быть отрицательным
+        // Денормализуем результат
+        $finalPrediction = max(0, $predictionValue);
 
         // Создаем и сохраняем объект прогноза
         $energyPrediction = new EnergyPrediction();
@@ -264,7 +439,6 @@ class EnergyPredictionService
         try {
             return Regression::r2Score($actual, $predicted);
         } catch (\Exception $e) {
-            // Если R² не может быть рассчитан, используем альтернативную метрику
             return $this->calculateAlternativeAccuracy($actual, $predicted);
         }
     }
@@ -287,7 +461,7 @@ class EnergyPredictionService
         }
 
         if ($ssTotal == 0) {
-            return 1.0; // Perfect fit if all values are the same
+            return 1.0;
         }
 
         return 1 - ($ssResidual / $ssTotal);
@@ -328,7 +502,6 @@ class EnergyPredictionService
      */
     private function calculatePredictionConfidence(float $prediction): float
     {
-        // Простая эвристика: чем выше прогноз, тем меньше уверенность (относительно)
         $baseConfidence = 0.85;
 
         if ($prediction > 1000) {
@@ -369,10 +542,12 @@ class EnergyPredictionService
     public function areModelsTrained(): array
     {
         $linearTrained = file_exists($this->modelStoragePath . 'linear_regression.model');
+        $svrTrained = file_exists($this->modelStoragePath . 'svr.model');
         $normalizerTrained = file_exists($this->modelStoragePath . 'normalizer.json');
 
         return [
             'linear_regression' => $linearTrained,
+            'support_vector_regression' => $svrTrained,
             'normalizer' => $normalizerTrained
         ];
     }
@@ -407,7 +582,7 @@ class EnergyPredictionService
      */
     private function getLastTrainingTime(): array
     {
-        $models = ['linear_regression.model', 'normalizer.json'];
+        $models = ['linear_regression.model', 'svr.model', 'normalizer.json'];
         $lastTraining = [];
 
         foreach ($models as $model) {

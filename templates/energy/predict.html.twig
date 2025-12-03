@@ -11,11 +11,11 @@
                     <h4 class="mb-0"><i class="bi bi-graph-up"></i> Прогноз потребления электроэнергии</h4>
                 </div>
                 <div class="card-body">
-                    <!-- Статус модели -->
+                    <!-- Статус моделей -->
                     <div class="alert alert-info">
-                        <h5><i class="bi bi-info-circle"></i> Статус модели:</h5>
+                        <h5><i class="bi bi-info-circle"></i> Статус моделей:</h5>
                         <div class="row">
-                            <div class="col-md-12">
+                            <div class="col-md-6 mb-2">
                                 Линейная регрессия:
                                 {% if models_trained.linear_regression %}
                                     <span class="badge bg-success">Обучена</span>
@@ -23,8 +23,16 @@
                                     <span class="badge bg-danger">Не обучена</span>
                                 {% endif %}
                             </div>
+                            <div class="col-md-6 mb-2">
+                                Support Vector Regression:
+                                {% if models_trained.support_vector_regression %}
+                                    <span class="badge bg-success">Обучена</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Не обучена</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% if not models_trained.linear_regression %}
+                        {% if not models_trained.linear_regression and not models_trained.support_vector_regression %}
                             <p class="mb-0 mt-2">
                                 <small>Для работы прогноза необходимо сначала обучить модель на странице обучения.</small>
                             </p>
@@ -81,9 +89,31 @@
                         </div>
                     </div>
 
+                    <!-- Выбор модели -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            {{ form_label(form.model_type) }}
+                            {{ form_widget(form.model_type, {'attr': {'class': 'form-select'}}) }}
+                            <div class="form-text">
+                                {% if models_trained.linear_regression and models_trained.support_vector_regression %}
+                                    <i class="bi bi-check-circle text-success"></i> Обе модели доступны для прогнозирования
+                                {% elseif models_trained.linear_regression %}
+                                    <i class="bi bi-info-circle text-info"></i> Доступна только Линейная регрессия
+                                {% elseif models_trained.support_vector_regression %}
+                                    <i class="bi bi-info-circle text-info"></i> Доступна только Support Vector Regression
+                                {% endif %}
+                            </div>
+                            {% if form.model_type.vars.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form_errors(form.model_type) }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-success btn-lg"
-                                {% if not models_trained.linear_regression %}disabled{% endif %}>
+                                {% if not models_trained.linear_regression and not models_trained.support_vector_regression %}disabled{% endif %}>
                             <i class="bi bi-calculator"></i> Сделать прогноз
                         </button>
                     </div>
@@ -93,7 +123,12 @@
                     <!-- Результат прогноза -->
                     {% if prediction %}
                         <div class="mt-4 p-4 bg-light rounded">
-                            <h4 class="text-success mb-4"><i class="bi bi-check-circle"></i> Результат прогноза</h4>
+                            <h4 class="text-success mb-4">
+                                <i class="bi bi-check-circle"></i> Результат прогноза
+                                <small class="text-muted fs-6">
+                                    ({{ selected_model == 'linear_regression' ? 'Линейная регрессия' : 'Support Vector Regression' }})
+                                </small>
+                            </h4>
 
                             <div class="row">
                                 <div class="col-md-6">
@@ -122,8 +157,16 @@
                                             <span class="text-primary">{{ prediction.temperature }}°C</span>
                                         </div>
                                         <div class="col-12 mt-2">
-                                            <strong>Модель:</strong><br>
-                                            <span class="badge bg-primary">Линейная регрессия</span>
+                                            <strong>Использованная модель:</strong><br>
+                                            {% if prediction.modelUsed == 'linear_regression' %}
+                                                <span class="badge bg-primary">
+                                                    <i class="bi bi-graph-up"></i> Линейная регрессия
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-info">
+                                                    <i class="bi bi-diagram-3"></i> Support Vector Regression
+                                                </span>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
@@ -138,7 +181,7 @@
 
                                         {% if prediction.confidence %}
                                             <div class="mt-3">
-                                            <span class="badge bg-info fs-6">
+                                            <span class="badge {% if prediction.confidence > 0.8 %}bg-success{% elseif prediction.confidence > 0.6 %}bg-warning{% else %}bg-danger{% endif %} fs-6">
                                                 <i class="bi bi-shield-check"></i>
                                                 Точность: {{ (prediction.confidence * 100)|number_format(1) }}%
                                             </span>
@@ -155,15 +198,36 @@
                                 </div>
                             </div>
 
-                            <!-- Дополнительная информация -->
+                            <!-- Сравнение моделей -->
+                            {% if models_trained.linear_regression and models_trained.support_vector_regression %}
+                                <div class="row mt-4">
+                                    <div class="col-12">
+                                        <div class="alert alert-warning">
+                                            <h6><i class="bi bi-lightbulb"></i> Сравнение моделей:</h6>
+                                            <p class="mb-0">
+                                                {% if selected_model == 'linear_regression' %}
+                                                    Линейная регрессия выбрана для этого прогноза. Это быстрая и интерпретируемая модель,
+                                                    хорошо работающая с линейными зависимостями. Для нелинейных данных попробуйте Support Vector Regression.
+                                                {% else %}
+                                                    Support Vector Regression выбрана для этого прогноза. Это мощная модель для сложных,
+                                                    нелинейных зависимостей. Для простых данных или быстрых расчетов используйте Линейную регрессию.
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <!-- Рекомендации -->
                             <div class="row mt-4">
                                 <div class="col-12">
-                                    <div class="alert alert-warning">
+                                    <div class="alert alert-secondary">
                                         <h6><i class="bi bi-lightbulb"></i> Рекомендации:</h6>
                                         <ul class="mb-0">
                                             <li>Прогноз основан на исторических данных и может отличаться от фактического потребления</li>
                                             <li>Учитывайте дополнительные факторы: тип отопления, наличие электроприборов</li>
                                             <li>Регулярно обновляйте данные для повышения точности прогнозов</li>
+                                            <li>Попробуйте разные модели для сравнения результатов</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -174,14 +238,14 @@
             </div>
 
             <!-- Ссылка на обучение моделей -->
-            {% if not models_trained.linear_regression %}
+            {% if not models_trained.linear_regression and not models_trained.support_vector_regression %}
                 <div class="text-center mt-4">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="text-warning"><i class="bi bi-exclamation-triangle"></i> Модель не обучена</h5>
+                            <h5 class="text-warning"><i class="bi bi-exclamation-triangle"></i> Модели не обучены</h5>
                             <p class="text-muted">Для использования функции прогнозирования необходимо обучить модель машинного обучения</p>
                             <a href="{{ path('energy_train') }}" class="btn btn-primary">
-                                <i class="bi bi-cpu"></i> Перейти к обучению модели
+                                <i class="bi bi-cpu"></i> Перейти к обучению моделей
                             </a>
                         </div>
                     </div>
@@ -223,6 +287,10 @@
 
         .card-header {
             font-weight: 600;
+        }
+
+        .badge {
+            font-size: 0.9em;
         }
     </style>
 {% endblock %}
